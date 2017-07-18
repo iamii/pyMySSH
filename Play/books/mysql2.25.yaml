@@ -1,0 +1,104 @@
+servers:
+  mysql98_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: master_script
+
+  mysql111_server:
+    ip: 192.168.18.111
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: slave_script
+
+master_script:
+  _const_:
+    user: slave
+    passwd: 123456
+    tar_url: http://cdn.mysql.com/archives/mysql-proxy/mysql-proxy-0.8.5-linux-el6-x86-64bit.tar.gz
+  main:
+    _cmds_:
+      -
+        setup_mysql_proxy
+      -
+        grant_user1_privileges
+      -
+        start_mysql_proxy
+
+  start_mysql_proxy:
+    _const_:
+      read_only_host: 192.168.18.111:3306
+      backend_host: 192.168.18.99:3306
+      lua-script: /usr/local/mysql-proxy/share/doc/mysql-proxy/rw-splitting.lua
+    _cmds_:
+      -
+        call_timeout: 5
+        cmd:
+          # --user=mysql-proxy --keepalive
+          "/usr/local/mysql-proxy/bin/mysql-proxy --daemon --log-level=debug
+          --log-file=/var/log/mysql-lua-rw.log
+          --plugins=admin --admin-username='admin' --admin-password='admin'
+          --admin-lua-script='/usr/local/mysql-proxy/share/doc/mysql-proxy/admin-sql.lua'
+           --plugins='proxy' --proxy-read-only-backend-addresses={read_only_host} --proxy-backend-addresses={backend_host}
+          --proxy-lua-script={lua-script}"
+
+  setup_mysql_proxy:
+    _const_:
+      local_path: /usr/local/mysql-proxy
+      rw_lua_file: /usr/local/mysql-proxy/share/doc/mysql-proxy/rw-splitting.lua
+    _cmds_:
+      -
+        put_file: d:\mysql-proxy-0.8.5-linux-el6-x86-64bit.tar.gz, /root/mysql-proxy-0.8.5-linux-el6-x86-64bit.tar.gz
+      -
+        cmd:
+          -
+            yum -y install lua #wget
+          #-
+             #wget {tar_url}
+          -
+            tar zxvf mysql-proxy-0.8.5-linux-el6-x86-64bit.tar.gz
+          -
+            mv mysql-proxy-*/ {local_path}
+         # -
+         #   sed -i "$ a\PATH=$PATH:{local_path}/bin" /etc/bashrc
+         # -
+         #   . /etc/bashrc
+          -
+            sed -ri "s/[[:space:]](min_idle_connections =).*$/\1 1,/"  {rw_lua_file}
+          -
+            sed -ri "s/[[:space:]](max_idle_connections =).*$/\1 1,/"  {rw_lua_file}
+
+  grant_user1_privileges:
+    _const_:
+      user: user1
+      passwd: 123456
+    _cmds_:
+      - #只给只读
+        cmd:
+          -
+            mysql -p{passwd} -e "GRANT INSERT ON book.* TO {user}@'%' IDENTIFIED BY '{passwd}';"
+          -
+            mysql -p{passwd} -e "FLUSH PRIVILEGES;"
+
+
+slave_script:
+  main:
+    _cmds_:
+      -
+        grant_user1_privileges
+
+  grant_user1_privileges:
+    _const_:
+      user: user1
+      passwd: 123456
+    _cmds_:
+      - #只给INSERT
+        cmd:
+          -
+            mysql -p{passwd} -e "GRANT SELECT ON book.* TO {user}@'%' IDENTIFIED BY '{passwd}';"
+          -
+            mysql -p{passwd} -e "FLUSH PRIVILEGES;"

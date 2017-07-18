@@ -1,0 +1,133 @@
+servers:
+  squid_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: server_script
+
+  inner_server:
+    ip: 192.168.11.111
+    port: 22
+    user: root
+    passwd: "123"
+    #timeout: 3
+    script: client_script
+
+server_script:
+  vars:
+    squid_server_outer: 192.168.18.99
+    squid_server_inner: 192.168.11.99
+    inner_server: 192.168.11.111
+    dns_server: 61.128.128.68
+    domain1: www.a.com
+    domain2: www.b.com
+    port: 80
+    squid_conf: /etc/squid/squid.conf
+  main:
+    # - cmd: service iptables stop
+    -
+      iptables_SNAT
+    - cmd: yum -y install squid
+    # - transparent_proxy
+    - Reverse_Proxy
+
+  iptables_SNAT:
+    - cmd: echo 1 > /proc/sys/net/ipv4/ip_forward
+    - cmd: iptables -F && iptables -F -t nat
+    - cmd: iptables -t nat -I POSTROUTING 1  -s {inner_server}  -j SNAT --to {squid_server_outer}
+
+  transparent_proxy:
+    - cmd: echo 1 > /proc/sys/net/ipv4/ip_forward
+    - cmd: iptables -F && iptables -F -t nat
+    - cmd: iptables -t nat -I PREROUTING 1 -p udp -d {squid_server_inner} --dport 53 -j DNAT --to {dns_server}
+    - cmd: iptables -t nat -I POSTROUTING 1 -p udp -s {inner_server} --dport 53 -j SNAT --to {squid_server_outer}
+    - cmd: iptables -t nat -I PREROUTING 2 -p tcp -s {inner_server} --dport 80 -j REDIRECT --to-ports 3128
+    - cmd: sed -i "s/http_access deny all/http_access allow all/" /etc/squid/squid.conf
+    - cmd: sed -i "s/^http_port 3128$/http_port 3128 transparent/" /etc/squid/squid.conf
+    -
+      if:
+        cmd: grep "visible_hostname" /etc/squid/squid.conf
+      return_code: 1
+      do:
+        cmd: sed -i "1i\visible_hostname test.test" /etc/squid/squid.conf
+    - cmd: service squid restart
+    - send_event: squid_restart_completed
+
+  Reverse_Proxy:
+    -
+      if:
+        cmd: grep "visible_hostname" {squid_conf}
+      return_code: 1
+      do:
+        cmd: sed -i "1i\visible_hostname test.test" {squid_conf}
+    - cmd: sed -i "s/http_access deny all/http_access allow all/" {squid_conf}
+    - cmd: sed -i "s/^http_port .*$/http_port 80 vhost/" {squid_conf}
+    -
+      if:
+        cmd: grep "cache_peer" {squid_conf}
+      return_code: 1
+      do:
+        cmd: 'sed -i "/^http_port 80 vhost$/a\
+        cache_peer {inner_server} parent {port} 0 no-query originserver weight=1 name=a\n\
+        cache_peer {inner_server} parent {port} 0 no-query originserver weight=1 name=b\n\
+        cache_peer_domain a {domain1}\n\
+        cache_peer_domain b {domain2}\n\
+        cache_peer_access a allow all\n
+        cache_peer_access b allow all\n\
+        " {squid_conf}'
+    -
+      cmd: service squid restart
+
+client_script:
+  vars:
+    squid_server: 192.168.11.99
+    ifcfg_file: /etc/sysconfig/network-scripts/ifcfg-eth0
+    GATEWAY: 192.168.11.99
+    DNS1: 114.114.114.114
+  main:
+    -
+      set_gw_dns
+
+  test2:
+    -
+      if:
+        cmd: grep "teee" /etc/passwd
+      return_code: 1
+      do:
+        exit: -1
+
+  set_gw_dns:
+    -
+      if:
+        cmd: grep "DNS1=.*"  {ifcfg_file}
+      do:
+        cmd: sed -i "s/^DNS1=.*/DNS1={DNS1}/" {ifcfg_file}
+      else:
+        cmd: sed -i "$ a\DNS1={DNS1}" {ifcfg_file}
+    -
+      if:
+        cmd: grep "GATEWAY=.*"  {ifcfg_file}
+      do:
+        cmd: sed -i "s/^GATEWAY=.*/GATEWAY={GATEWAY}/" {ifcfg_file}
+      else:
+        cmd: sed -i "$ a\GATEWAY={GATEWAY}" {ifcfg_file}
+    -
+      cmd: service network restart
+    -
+      cmd: service iptables stop
+
+  test1:
+    if:
+      ### 等待事件名称
+      wait_event: squid_restart_completed
+      ### 最长过程调用超时时间
+      _call_time_out: 100
+      # 请求失败时，等待重试时长
+      poll_time: 3
+      # 请求成功，但未匹配到事件时，等待重试时长
+      _cond_wait_out: 5
+    return_code: 0
+    do:
+      cmd: curl www.baidu.com

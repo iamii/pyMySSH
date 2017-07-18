@@ -1,0 +1,60 @@
+servers:
+  mysql_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: server_script
+
+#2-19-Mysql常见数据类型
+#作业：
+#1、创建一个员工信息表。合理设置字段：id，name，sex， birthday，address、Phone相关数据类型。
+#2、快速掌握本讲中所有基础数据类型。
+
+server_script:
+  _const_:
+
+    mysql_user: root
+    mysql_pass: 123456
+  main:
+    _cmds_:
+      -
+        cmd_func
+      -
+        mysql_func
+
+  cmd_func:
+    _cmds_:
+      -
+        call_timeout: 5
+        cmd: mysql -uroot -p
+        std_in:
+          - "{mysql_pass}"
+          # - create database testdata1;
+          # - show databases;
+          - quit
+
+  mysql_func:
+    _const_:
+    _cmds_:
+      -
+        mysql: {'host': '192.168.18.99',  # 默认127.0.0.1
+              'user': 'root',
+              'password': '123456',
+              'port': 3306,  # 默认3306
+              'database': 'mysql',
+              'charset': 'utf8'  # 默认为utf8
+              }
+        dml_sql:
+          - CREATE DATABASE employees DEFAULT CHARSET utf8 COLLATE utf8_general_ci;
+          - USE employees;
+          - CREATE TABLE employees(
+              id INT(5) UNSIGNED,
+              name CHAR(50),
+              sex ENUM('F', 'M'),
+              birthday DATE,
+              address CHAR(100),
+              phone CHAR(20)
+            ) ENGINE=INNODB;
+          - DESC employees;

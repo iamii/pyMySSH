@@ -1,0 +1,46 @@
+servers:
+  samba_server:
+    ip: 192.168.5.6
+    port: 22
+    user: root
+    passwd: "123456123"
+    timeout: 3
+    script: server_script
+
+server_script:
+  _cmds_:
+    - cmd: yum -y install samba
+    #- test1
+    - test2
+    - cmd: service iptables stop && setenforce 0 && service smb restart
+
+test1:
+  _cmds_:
+    #1、公司现在用一个工作组xuegod.cn， 需要添加samba 服务器作为文件服务器哈，并发布共享目
+    #录/workdata，共享名为workdata,这个共享目录允许所有公司员工访问。
+    - cmd: mkdir /workdata && chmod o+w /workdata && service iptables stop && setenforce 0
+    - cmd: sed -i "s/^[[:space:]]workgroup[[:space:]]=.*$/\t workgroup = xuegod.cn/" /etc/samba/smb.conf
+    - cmd: sed -i "s/^[[:space:]]security[[:space:]]=.*$/\t security = share/" /etc/samba/smb.conf
+    - cmd: echo -e "[workdata]\n\t path = /workdata\n\t public = yes\n\t writeable = yes" >> /etc/samba/smb.conf
+
+test2:
+  _cmds_:
+    #2、通过用户名和密码访问共享文件。把技术部资料文件：/tech  共享出去，
+    # 只有技术部tech组的用户可以使用用户名和密码访问此共享目录。 共享名为tech， 共享资源描述为：Technical Document Sharing
+    - cmd: sed -i "s/^[[:space:]]security[[:space:]]=.*$/\t security = user/" /etc/samba/smb.conf
+    - cmd: sed -i "s/^[[:space:]]passdb[[:space:]]backend[[:space:]]=.*$/\t passdb backend = smbpasswd/" /etc/samba/smb.conf
+    - cmd: sed -i "/^\t passdb backend = smbpasswd/a\\\t smb passwd file = /etc/samba/smbpasswd" /etc/samba/smb.conf
+    - cmd: echo -e "[bak]\n\t path = /bak\n\t valid users = @bak\n\t comment = Technical Docutment Sharing\n\t writeable = yes" >> /etc/samba/smb.conf
+    - ########创建共享目录并赋权##########
+      cmd: mkdir /bak && chmod o+w /bak
+    - ###########创建用户/组#####
+      cmd: groupadd bak && useradd -g bak jd && useradd -g bak dyh && echo "123321" | passwd --stdin jd && echo "123" | passwd --stdin dyh
+    ##########
+    - cmd: smbpasswd -a jd
+      std_in: ["123321", "123321"]
+      timeout: 10
+    - cmd: smbpasswd -a dyh
+      std_in: ["123", "123"]
+      timeout: 10
+
+

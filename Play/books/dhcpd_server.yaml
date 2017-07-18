@@ -1,0 +1,45 @@
+servers:
+  server1:
+    ip: 192.168.2.128
+    port: 2222
+    user: root
+    passwd: "123"
+    script: setup script
+#  server2:
+#    ip: 192.168.5.233
+#    port: 41705
+#    user: test
+#    passwd: "123"
+
+setup script:
+  _cmds_:
+    - test
+
+test:
+    _cmds_:
+        -
+          if:
+            cmd: yum -y install dhcp
+          return_code: 0
+          do:
+            # 生成配置文件
+            -
+              make_config:
+                template: ./dhcpd/dhcpd.tpl
+                vars_dict: ../Config/templates/dhcpd/dhcpd.dict
+                output: ../Config/templates/dhcpd/dhcpd.conf
+            -
+              start_dhcpd
+
+start_dhcpd:
+    _cmds_:
+       # sftp上传文件
+        if:
+          put_file: ../Config/templates/dhcpd/dhcpd.conf, /etc/dhcp/dhcpd.conf
+        return_code: 0
+        do:
+          if:
+            cmd: ls -al /etc/dhcp/dhcpd.conf
+          return_code: 0
+          do:
+            cmd: service dhcpd restart

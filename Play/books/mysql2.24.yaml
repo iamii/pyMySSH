@@ -1,0 +1,144 @@
+servers:
+  mysql_master_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: master_script
+
+  mysql_slave_server:
+    ip: 192.168.18.111
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: slave_script
+
+master_script:
+  _const_:
+    master-ip: 192.168.18.99
+    slave-ip: 192.168.18.111
+    user: slave
+    passwd: 123456
+  main:
+    _cmds_:
+      -
+        master_config_file
+      -
+        cmd: service mysqld restart
+      -
+        grant_privileges
+      -
+        cmd: mysqldump -uroot -p123456 --master-data=1 --databases book > db_book.sql
+        #cmd: mysqldump -uroot -p123456 --master-data=1 --single-transaction --databases book > db_book.sql
+      - #添加MASTER_HOST, MASTER_USER, MASTER_PASSWORD
+        cmd: sed -ri "s/^(CHANGE MASTER TO)(.*)$/\1 MASTER_HOST='{master-ip}', MASTER_USER='{user}', MASTER_PASSWORD='{passwd}',\2/" db_book.sql
+      -
+        get_file: /root/db_book.sql, d:\db_book.sql
+      -
+        send_event: dump_file_done
+
+  grant_privileges:
+    _cmds_:
+      - # grant replication slave
+        cmd: mysql -p{passwd} -e "GRANT REPLICATION SLAVE ON *.* TO {user}@{slave-ip} IDENTIFIED BY '{passwd}';"
+      -
+        cmd: mysql -p{passwd} -e "FLUSH PRIVILEGES;"
+      -
+        cmd: mysql -p{passwd} -e "SHOW MASTER STATUS;"
+
+
+  master_config_file:
+    _const_:
+      mycnf: /etc/my.cnf
+      replicate-db: book
+      master-id: 999
+    _cmds_:
+      -
+        cmd: \cp /etc/my.cnf /etc/my.cnf.bak
+      - # log-bin
+        if:
+          cmd: grep "log-bin=.*" {mycnf}
+        return_code: 1
+        do:
+          cmd: sed -i "/\[mysqld\]/a\log-bin=mysqllog-bin" {mycnf}
+        else:
+          cmd: sed -i "s/log-bin=.*/log-bin=mysqllog-bin/" {mycnf}
+      - # server-id
+        if:
+          cmd: grep "server-id=.*" {mycnf}
+        return_code: 1
+        do:
+          cmd: sed -i "/\[mysqld\]/a\server-id={master-id}" {mycnf}
+        else:
+          cmd: sed -i "s/server-id=.*/server-id={master-id}/" {mycnf}
+      - # binlog-do-db
+        if:
+          cmd: grep "binlog-do-db=.*" {mycnf}
+        return_code: 1
+        do:
+          cmd: sed -i "/\[mysqld\]/a\binlog-do-db={replicate-db}" {mycnf}
+        else:
+          cmd: sed -i "s/binlog-do-db=.*/binlog-do-db={replicate-db}/" {mycnf}
+
+slave_script:
+  main:
+    _cmds_:
+      -
+        slave_config_file
+      -
+        grant_root_privileges
+      -
+        wait_event: dump_file_done
+        cond_waitout: 1
+        call_timeout: 30
+      -
+        put_file: d:\db_book.sql, /root/db_book.sql
+      -
+        cmd: mysql -p123456 -e "stop slave";
+      -
+        cmd: mysql -uroot -p123456 --default-character-set=utf8 mysql < /root/db_book.sql
+      -
+        cmd: service mysqld restart
+      -
+        cmd: mysql -p123456 -e "start slave";
+      -
+        cmd: mysql -p123456 -e "show slave status";
+
+  grant_root_privileges:
+    _const_:
+      passwd: 123456
+    _cmds_:
+      -
+        cmd: service mysqld restart
+      -
+        cmd: mysql -p{passwd} -e "GRANT ALL PRIVILEGES ON *.* TO root@'%' IDENTIFIED BY '123456' WITH GRANT OPTION;"
+      -
+        cmd: mysql -p{passwd} -e "FLUSH PRIVILEGES;"
+
+  slave_config_file:
+    _const_:
+      mycnf: /etc/my.cnf
+      replicate-db: book
+      master-ip: 192.168.18.99
+      slave-id: 222 # 取的eht0 ip的最后8位
+      user: slave
+      passwd: 123456
+    _cmds_:
+      -
+        cmd: \cp /etc/my.cnf /etc/my.cnf.bak
+      - # server-id
+        if:
+          cmd: grep "server-id=.*" {mycnf}
+        return_code: 1
+        do:
+          cmd: export slaveid=`ifconfig eth0 | grep "inet addr"| awk -F' ' '{{print $2}}'| cut -d '.' -f 4` && sed -i "/\[mysqld\]/a\server-id=${{slaveid}}" {mycnf}
+        else:
+          cmd: export slaveid=`ifconfig eth0 | grep "inet addr"| awk -F' ' '{{print $2}}'| cut -d '.' -f 4` && sed -i "s/server-id=.*/server-id=${{slaveid}}/" {mycnf}
+      #- # master_host
+      #  if:
+      #    cmd: grep "master_host=.*" {mycnf}
+      #  return_code: 1
+      #  do:
+      #    cmd: sed -i "/\[mysqld\]/a\master-host={master-ip}\nmaster-user={user}\nmaster-password={passwd}" {mycnf}

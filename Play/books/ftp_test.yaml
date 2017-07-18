@@ -1,0 +1,50 @@
+servers:
+  ntp_server:
+    ip: 192.168.2.200
+    port: 22
+    user: root
+    passwd: "123"
+    script: server script
+
+  ntp_client_server:
+    ip: 192.168.2.251
+    port: 22
+    user: root
+    passwd: "123"
+    script: client_script
+
+server script:
+  _cmds_:
+    test1
+
+test1:
+  _cmds_:
+    - cmd: yum -y install httpd vsftpd && service httpd restart
+    - add_users
+    - config
+    - cmd: chmod -R o+w /var/www/html
+    - cmd: service iptables stop && setenforce 0
+    - cmd: service vsftpd restart
+
+add_users:
+  _cmds_:
+    - cmd: useradd -s /sbin/nologin team1 && echo "123456" | passwd --stdin team1
+    - cmd: useradd -s /sbin/nologin team2 && echo "123456" | passwd --stdin team2
+
+config:
+  _cmds_:
+    - # anonymous_enable=YES
+      cmd: sed -i "s/anonymous_enable=.*/anonymous_enable=NO/" /etc/vsftpd/vsftpd.conf
+    - # anonymous_enable=NO
+      cmd: sed -i "s/local_enable=.*/local_enable=YES/" /etc/vsftpd/vsftpd.conf
+    - ###chroot###
+      cmd: sed -i "/#chroot_list_enable=YES/i\local_root=/var/www/html" /etc/vsftpd/vsftpd.conf
+    - cmd: sed -i "s/#chroot_list_enable=YES/chroot_list_enable=YES/" /etc/vsftpd/vsftpd.conf
+    - cmd: sed -i "s@#chroot_list_file=.*@chroot_list_file=/etc/vsftpd/chroot_list@" /etc/vsftpd/vsftpd.conf
+    - #### chroot list
+      cmd: echo -e "team1\nteam2" >> /etc/vsftpd/chroot_list
+
+
+client_script:
+  _cmds_:
+    -

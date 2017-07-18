@@ -1,0 +1,29 @@
+template:
+  NDB_MGMD_DEFAULT:
+    Portnumber: 1186
+
+  NDB_MGMD:
+    NodeId: 10
+    HostName: 192.168.18.99
+    DataDir: /var/lib/mysql-cluster/
+    Portnumber: 1186
+
+  NDBD_DEFAULT:
+    DataMemory: 100M
+    IndexMemory: 50M
+
+  NDBD:
+    -
+      NodeId: 20
+      HostName: 192.168.18.113
+      DataDir: /var/lib/mysql/
+    -
+      NodeId: 21
+      HostName: 192.168.18.114
+      DataDir: /var/lib/mysql/
+
+  MYSQLD:
+    -
+      hostname: 192.168.18.111
+    -
+      hostname: 192.168.18.112

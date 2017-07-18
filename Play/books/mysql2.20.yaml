@@ -1,0 +1,43 @@
+servers:
+  mysql_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: server_script
+
+#2-20-mysql-sql语句进阶
+#作业：
+#1、写出发贴数最多的十个人名字的SQL，利用下表：members(id,username,posts（贴子数量）,email)。
+#此表自己创建，自己添加内容。
+#2、例：选择 类型名为“安全”的图书：
+#3、显示字段bName ,price ；  条件：找出价格高于“科学出版社”出版的最贵的书的书。
+
+
+server_script:
+  _const_:
+  main:
+    _cmds_:
+      -
+        mysql_cmd
+
+  mysql_cmd:
+    _cmds_:
+      -
+        mysql: {'host': '192.168.18.99',  # 默认127.0.0.1
+              'user': 'root',
+              'password': '123456',
+              'port': 3306,  # 默认3306
+              'database': 'book',
+              'charset': 'utf8'  # 默认为utf8
+              }
+        dml_sql:
+          #-
+          # SELECT username FROM members ORDER BY posts LIMIT 10
+          #-
+            #SELECT * FROM books WHERE bTypeId = (SELECT bTypeId FROM category WHERE bTypeName ="安全")
+          -
+            #SELECT bName, price FROM books WHERE price > (SELECT MAX(price) FROM books WHERE publishing="科学出版社");
+            SELECT bName, price FROM books WHERE price > (SELECT price FROM books WHERE publishing="科学出版社" ORDER BY price DESC LIMIT 1);
+

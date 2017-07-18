@@ -1,0 +1,166 @@
+servers:
+  mysql_manager_99_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: master_script
+
+  mysql_sql_111_server:
+    ip: 192.168.18.111
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: mysqld_node_script
+
+  mysql_sql_112_server:
+    ip: 192.168.18.112
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: mysqld_node_script
+
+  mysql_ndb_113_server:
+    ip: 192.168.18.113
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: ndbd_node_script
+
+  mysql_ndb_114_server:
+    ip: 192.168.18.114
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: ndbd_node_script
+
+_const_:
+  rpm_file_local: D:\MySQL-Cluster-gpl-7.4.12-1.el6.x86_64.rpm-bundle
+  Cluster-server-rpm: MySQL-Cluster-server-gpl-7.4.12-1.el6.x86_64.rpm
+  Cluster-client-rpm: MySQL-Cluster-client-gpl-7.4.12-1.el6.x86_64.rpm
+
+remove_installed_mysql:
+  _cmds_:
+    -
+      cmd:
+        -
+          yum -y remove mysql-server mysql
+        -
+          rpm -e --nodeps mysql-libs
+        -
+          rm /etc/my.cnf && rm -rf /var/lib/mysql
+        -
+          userdel -r mysql && groupdel mysql
+
+install_cluster_client:
+  _cmds_:
+    -
+      put_file: '{rpm_file_local}\{Cluster-client-rpm}, {Cluster-client-rpm}'
+    -
+      cmd:
+        -
+          yum -y install {Cluster-clietn-rpm}
+
+install_cluster_server:
+  _cmds_:
+    -
+      put_file: '{rpm_file_local}\{Cluster-server-rpm}, {Cluster-server-rpm}'
+    -
+      cmd:
+        -
+          yum -y install {Cluster-server-rpm}
+
+master_script:
+  _const_:
+    master_ip: 192.168.18.99
+  _cmds_:
+    -
+      remove_installed_mysql
+    -
+      install_cluster_server
+    -
+      cmd:
+        -
+          mkdir -p /var/lib/mysql-cluster && chown -R mysql.mysql /var/lib/mysql-cluster
+    -
+      make_config:
+            template: ./mysql-cluster/master_config.ini.tpl
+            vars_dict: ../Config/templates/mysql-cluster/master_config.dict
+            output: ../Config/templates/mysql-cluster/config.ini
+    -
+      put_file: ../Config/templates/mysql-cluster/config.ini, /var/lib/mysql-cluster/config.ini
+    -
+      cmd:
+        -
+          ndb_mgmd -f /var/lib/mysql-cluster/config.ini
+        -
+          sleep 5
+    -
+      poll_time: 1
+      send_event: master_started
+      call_timeout: 300
+      send_values: 1
+
+mysqld_node_script:
+  _cmds_:
+    -
+      remove_installed_mysql
+    -
+      install_cluster_server
+    -
+      make_config:
+            template: ./mysql-cluster/my.cnf.tpl
+            vars_dict: ../Config/templates/mysql-cluster/my.cnf.dict
+            output: ../Config/templates/mysql-cluster/my.mysqld.cnf
+    -
+      put_file: ../Config/templates/mysql-cluster/my.mysqld.cnf, /etc/my.cnf
+    -
+      call_timeout: 300
+      poll_time: 3
+      cond_waitout: 20
+      wait_event: ndbd_started
+      wait_values: 2
+    -
+      cmd:
+        -
+         nohup mysqld_safe --defaults-file=/etc/my.cnf &
+
+ndbd_node_script:
+  _cmds_:
+    -
+      remove_installed_mysql
+    -
+      install_cluster_server
+    -
+      make_config:
+            template: ./mysql-cluster/my.cnf.tpl
+            vars_dict: ../Config/templates/mysql-cluster/my.cnf.dict
+            output: ../Config/templates/mysql-cluster/my.ndbd.cnf
+            add_item:
+              template:
+                ISNDBD:
+                  master: 192.168.18.99
+    -
+      put_file: ../Config/templates/mysql-cluster/my.ndbd.cnf, /etc/my.cnf
+    -
+      call_timeout: 100
+      poll_time: 2
+      cond_waitout: 5
+      wait_event: master_started
+      wait_values: 1
+    -
+      cmd:
+        -
+          ndbd --initial
+        -
+          sleep 5
+    -
+      poll_time: 2
+      call_timeout: 300
+      send_event: ndbd_started
+      send_values: 1

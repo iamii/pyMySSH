@@ -1,0 +1,72 @@
+servers:
+  http_server:
+    ip: 192.168.11.111
+    port: 22
+    user: root
+    passwd: "123"
+    timeout: 3
+    script: server_script
+
+#  ntp_client_server:
+#    ip: 192.168.18.111
+#    port: 22
+#    user: root
+#    passwd: "123"
+#    timeout: 3
+#    script: client_script
+
+server_script:
+  main:
+    -
+      if:
+        cmd: yum clean all && yum makecache && yum -y install httpd
+        sc_timeout: 3
+        call_timeout: 100
+      return_code: -2
+      do:
+        exit: -1
+    -
+      test1
+    -
+      test3
+    -
+      cmd: service httpd restart
+
+  make:
+    -
+      make_config:
+           template: ./httpd/httpd.tpl
+           vars_dict: ../Config/templates/httpd/httpd.dict
+           output: ../Config/templates/httpd/httpd.conf
+    -
+      put_file: ../Config/templates/httpd/httpd.conf, /etc/httpd/conf/httpd.conf
+
+  test1:
+    -
+      cmd: mv /etc/httpd/conf.d/welcome.conf /etc/httpd/conf.d/welcome.conf.bak
+    -
+      cmd: echo "Hello world." > /var/www/html/index.html && mkdir /var/www/html/bbs && echo "bbs" > /var/www/html/bbs/index.html
+    -
+      make
+
+  test2:
+    -
+      cmd: mkdir /var/www/html/sec && echo "secret" > /var/www/html/sec/index.html
+    -
+      cmd: htpasswd -cmb /etc/httpd/conf/passwd.secret test 123
+    -
+      make
+
+  test3:
+    -
+      cmd: mkdir /var/www/html/8000 && echo "www.a.com" > /var/www/html/8000/index.html
+    -
+      cmd: mkdir /var/www/html/8888 && echo "www.b.com" > /var/www/html/8888/index.html
+    -
+      make
+
+
+
+
+
+

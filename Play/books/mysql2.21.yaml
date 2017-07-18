@@ -1,0 +1,89 @@
+servers:
+  mysql_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: server_script
+
+#2-21-存储过程-触发器-事务-mysql引擎讲解
+#作业：
+#1.熟悉存储过程-触发器-事务-mysql体系架构相关内容
+#2.复习MYSQL有哪些存储引擎，各有什么优缺点
+#生产中如何选择M有SQL存储引擎
+
+server_script:
+  _const_:
+  main:
+    _cmds_:
+      -
+        mysql_cmd
+
+  mysql_cmd:
+    _cmds_:
+      -
+        mysql: {'host': '192.168.18.99',  # 默认127.0.0.1
+              'user': 'root',
+              'password': '123456',
+              'port': 3306,  # 默认3306
+              'database': 'book',
+              'charset': 'utf8'  # 默认为utf8
+              }
+        dml_sql:
+        #  -
+        #  #########存储过程#############
+        #    CREATE PROCEDURE proc1 (in iPrice int)
+        #    BEGIN
+        #       SELECT * FROM books WHERE price > iPrice;
+        #    END
+        #  -
+        #    CREATE PROCEDURE proc2 (in cType varchar(40))
+        #    BEGIN
+        #       SELECT * FROM books WHERE bTypeId = (SELECT bTypeId FROM category WHERE bTypeName = cType);
+        #    END
+        #  #- 不行
+        #  # CALL TEST2 (63)
+        #  ############触发器##########
+        #  -
+        #    CREATE TRIGGER trigger1 BEFORE INSERT ON category FOR EACH ROW
+        #      IF POSITION("office" IN new.bTypeName) > 0 THEN
+        #        SET new.bTypeName = "我们只会linux";
+        #      ELSE
+        #        SET new.bTypeName = "功夫不好，不要强力插入";
+        #      END IF;
+        #  -
+        #    INSERT INTO category (bTypeId, bTypeName) VALUES (11, "OFFICE");
+        #  -
+        #    INSERT INTO category (bTypeId, bTypeName) VALUES (12, "打字");
+        #  -
+        #    SELECT * FROM category;
+          ##########事务########
+          - # MyISAM不支持事务
+            ALTER TABLE books ENGINE=innodb;
+          -
+            ALTER TABLE category ENGINE=innodb;
+          -
+            SET AUTOCOMMIT=0;
+          -
+            START TRANSACTION;
+          -
+            INSERT INTO category (bTypeId, bTypeName) VALUES (13, "不会OFFICE");
+          -
+            INSERT INTO books (bName, bTypeId) VALUES ("office从入门到精通", 13);
+          #- # 提交之后无法回滚
+          #  COMMIT;
+          -
+            SELECT * FROM books as b, category as c WHERE b.bTypeId = c.bTypeId And b.bTypeId = 13;
+          -
+            ROLLBACK;
+          -
+            SELECT * FROM books as b, category as c WHERE b.bTypeId = c.bTypeId And b.bTypeId = 13;
+
+       # call_p:
+       #   - # 调用存储过程
+       #     name: proc1
+       #     args: [63]
+       #   -
+       #     name: proc2
+       #     args: ["安全"]

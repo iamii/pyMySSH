@@ -1,0 +1,11 @@
+template:
+  client:
+    port: 3306
+    socket: /tmp/mysql.sock
+  mysqld:
+    datadir: /var/lib/mysql
+    user: mysql
+    log_error: /var/lib/mysql/mysqld.err
+    master: 192.168.18.99
+  mysql_cluster:
+    master: 192.168.18.99

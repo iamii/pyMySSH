@@ -1,0 +1,61 @@
+servers:
+  router_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    timeout: 3
+    script: server_script
+
+#  innter_server:
+#    ip: 192.168.11.111
+#    port: 22
+#    user: root
+#    passwd: "123"
+#    timeout: 3
+#    script: client_script
+
+_const_:
+  router_outer: 192.168.18.99
+  router_inner: 192.168.11.99
+  inner_server_ip: 192.168.11.111
+
+server_script:
+  _cmds_:
+    - cmd: iptables -F && iptables -F -t nat && sleep 3
+    - test1
+    - test2
+
+test1:
+  _cmds_:
+    #- cmd: iptables -t nat -I POSTROUTING -s {inner_server_ip} -j SNAT --to {router_outer}
+    - cmd: iptables -t nat -I POSTROUTING -d {inner_server_ip} -j SNAT --to {router_inner}
+
+test2:
+  _cmds_:
+    -
+      cmd: iptables -t nat -I PREROUTING -p tcp --dport 80 -d {router_outer} -j DNAT --to {inner_server_ip}:80
+##################################################################
+client_script:
+  _const_:
+    ifcfg_file: /etc/sysconfig/network-scripts/ifcfg-eth0
+    GATEWAY: 192.168.11.99
+  _cmds_:
+    -
+      if:
+        cmd: grep "GATEWAY=.*"  {ifcfg_file}
+      return_code: 1
+      do:
+        cmd: sed -i "s/^GATEWAY=.*/GATEWAY={GATEWAY}/" {ifcfg_file} && service network restart
+    - t1
+    - t2
+
+t1:
+  _cmds_:
+      - cmd: ping 114.114.114.114 -c 5
+      - cmd: ping 114.114.114.114 -c 3
+
+t2:
+  _cmds_:
+      - cmd: yum -y install httpd && service httpd restart
+

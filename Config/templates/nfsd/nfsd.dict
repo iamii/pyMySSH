@@ -1,0 +1,20 @@
+template:
+  dirs:
+    -
+      path: /tmp
+      clients:
+        -
+          ip_range: '*'
+          options: ro
+        -
+          ip_range: 192.168.18.0/24
+          options: rw,sync
+    -
+      path: /etc
+      clients:
+        -
+          ip_range: '*'
+          options: ro
+        -
+          ip_range: 192.168.18.99
+          options: rw,async

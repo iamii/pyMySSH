@@ -1,0 +1,37 @@
+servers:
+  uc_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: server_script
+
+server_script:
+  main:
+    -
+     install and start
+    -
+      setup_ucenter
+
+  vars:
+    passwd: 123456
+  install and start:
+    - cmd: yum -y install httpd mysql-server mysql php php-mysql
+    - cmd: service httpd restart && service mysqld start && service iptables stop
+    - cmd: mysqladmin -uroot password {passwd}
+    -
+      cmd: mysql_secure_installation
+      std_in: ["{passwd}", "n", "y", "y", "y", "y"]
+    - cmd: mysql -uroot -p{passwd} -e "show databases;"
+    - cmd: echo -e "<?php\nphpinfo();\n?>" > /var/www/html/index.php
+
+  setup_ucenter:
+    - put_file: d:/UCenter_1.5.0_SC_UTF8.zip, /root/ucenter.zip
+    - cmd: unzip -od /usr/local/src/ucenter ucenter.zip
+    - cmd: mv /usr/local/src/ucenter/upload /var/www/html/kaixin001
+    - cmd: sed -i "s/short_open_tag = Off/short_open_tag = On/" /etc/php.ini
+    -
+      cmd: chown apache.apache /var/www/html/kaixin001/data -R && chmod -R a+w /var/www/html/kaixin001/data
+    -
+      cmd: setenforce 0 && service httpd restart

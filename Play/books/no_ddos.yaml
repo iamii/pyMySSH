@@ -1,0 +1,40 @@
+servers:
+  mysql_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: server_script
+
+server_script:
+  main:
+  _const_:
+  -cmds_:
+    -
+
+
+
+  syn_flood:
+    _cmds_:
+      _ # 增加新链
+        cmd: iptables -N syn-flood
+      - # 当TCP-SYN标志置位时跳转至syn-flood链
+        cmd: iptables -A INPUT -p tcp --syn -j syn-flood
+      - # 限制【每IP】的TCP连接发起总数不大于60
+        cmd: iptables -I syn-flood -p tcp --syn -m connlimit --connlimit-above 60 -j DROP
+      - # SYN包平均每秒接收60个，瞬间峰值300个——服务器在单位时间内接受的TCP连接发起的速率
+        cmd: iptables -I syn-flood -p tcp -m limit --limit 60/s --limit-burst 300 -j RETURN
+      - # 如果不符合上面的规则就REJECT
+        cmd: iptables -A syn-flood -j REJECT
+
+  connects_per_minute:
+    _cmds_:
+      -
+        cmd: echo -e 'options ipt_recent ip_list_tot=1000 ip_pkt_list_tot=60' >> /etc/modprobe.conf
+        cmd: modprobe ipt-recent
+      - #
+        cmd: iptables -A INPUT -p tcp --dport 80 -m recent --name BAD_HTTP_ACCESS --update --seconds 60 --hitcount 60 -j REJECT
+      -
+        cmd: iptables -A INPUT -p tcp --dport 80 -m recent --name BAD_HTTP_ACCESS --set -j ACCEPT
+

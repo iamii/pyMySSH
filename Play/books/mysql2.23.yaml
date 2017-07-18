@@ -1,0 +1,77 @@
+servers:
+  mysql_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: server_script
+
+#1.登陆数据库系统并创建job数据库
+#2.创建user表
+#3.创建information 表
+#4. 在name 字段创建名为index_name的索引
+#5.创建名为index_bir的多列索引
+#6. 用ALTER TABLE语句创建名为index_id 的唯一性索引
+#7.删除user表上的index_user索引
+#8.删除information表上的index_name索引
+
+server_script:
+  _const_:
+  main:
+    _cmds_:
+      -
+        mysql_cmd
+
+  mysql_cmd:
+    _cmds_:
+      -
+        mysql: {'host': '192.168.18.99',  # 默认127.0.0.1
+              'user': 'root',
+              'password': '123456',
+              'port': 3306,  # 默认3306
+              #'database': 'mysql',
+              'charset': 'utf8'  # 默认为utf8
+              }
+        dml_sql:
+          -
+            CREATE DATABASE job;
+          -
+            USE job;
+          -
+            CREATE TABLE user (
+              userid INT(10) PRIMARY KEY NOT NULL AUTO_INCREMENT COMMENT "编号",
+              username VARCHAR(20) NOT NULL COMMENT "用户名",
+              passwd VARCHAR(20) NOT NULL COMMENT "密码",
+              info TEXT COMMENT "附加信息"
+            )ENGINE=INNODB
+          -
+            CREATE TABLE information (
+              id INT(10) PRIMARY KEY NOT NULL AUTO_INCREMENT,
+              name VARCHAR(20) NOT NULL COMMENT "姓名",
+              sex VARCHAR(4) NOT NULL COMMENT "性别",
+              birthday DATE COMMENT "生日",
+              address VARCHAR(50) COMMENT "家庭住址",
+              tel VARCHAR(20) COMMENT "电话号码",
+              pic BLOB COMMENT "照片",
+              INDEX index_name (name),
+              INDEX index_bir (id, name, birthday)
+            )ENGINE=INNODE
+          -
+            DESC user
+          -
+            DESC information
+          - #用ALTER TABLE语句创建名为index_id 的唯一性索引
+            ALTER TABLE information ADD UNIQUE INDEX index_id (id);
+          # - #7.删除user表上的index_user索引
+          #  ALTER TABLE information DROP INDEX index_user
+          -
+            #8.删除information表上的index_name索引
+            ALTER TABLE information DROP INDEX index_name;
+          -
+            DESC user
+          -
+            DESC information
+
+
+

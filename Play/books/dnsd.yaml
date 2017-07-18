@@ -1,0 +1,103 @@
+servers:
+  dns1_server:
+    ip: 192.168.2.200
+    port: 22
+    user: root
+    passwd: "123"
+    timeout: 3
+    script: dns1_script
+
+  dns2_server:
+    ip: 192.168.2.251
+    port: 22
+    user: root
+    passwd: "123"
+    timeout: 3
+    script: dns2_script
+
+  # 1、给公司配置一个内网DNS服务器，可以解析域名 xuegod.cn为IP：192.168.1.63。
+  # 另外，为保证服务器稳定，你还要把xuegod64搭建成一个从DNS服务器。
+  # 测试：配置PC客户端的DNS服务器地址为：192.168.1.63和192.168.1.64 .
+  # 当把192.168.1.63网卡关闭时，ping xuegod.cn  还可以通过xuegod64正常解析。
+
+dns1_script:
+  _cmds_:
+    -
+      if:
+        cmd: yum install bind bind-chroot bind-utils -y
+      return_code: 0
+      do:
+        - test1
+        - cmd: service named restart
+
+_defines_:
+    master: 192.168.2.200
+    zone: "xuegod.cn"
+
+
+test1:
+  _defines_:
+    dns1: 192.168.1.63
+    www3: 192.168.18.99
+  _cmds_:
+    - cmd: sed -i "s/listen-on port 53 {{} 127.0.0.1;{}};/listen-on port 53 {{} any; {}};/" /etc/named.conf
+    - cmd: sed -i "/dnssec-validation yes/a\\\tdnssec-lookaside auto;" /etc/named.conf
+    - cmd: sed -i "s/{ localhost; };/{ any; };/" /etc/named.conf
+    - if:
+        cmd: grep "xuegod.cn" /etc/named.conf
+      return_code: 1
+      do:
+        cmd: sed -i "/rfc1912\.zones/i\zone \"{zone}\" IN {{}\n\ttype master;\n\tfile \"{zone}\.zone\";\n{}};" /etc/named.conf
+    - ##########edit xuegod.cn.zone
+      cmd: cd /var/named/ && \cp -a named.localhost {zone}.zone
+    - cmd: sed -i "s/^@[[:space:]]IN SOA[[:space:]]@ rname.invalid./{zone}.\tIN SOA dns.{zone}. root.{zone}./" /var/named/{zone}.zone
+    - cmd: sed -i "s/^[[:space:]]NS[[:space:]]@/{zone}.\tNS\tdns.{zone}./" /var/named/{zone}.zone
+    - cmd: sed -i "s/^[[:space:]]A[[:space:]]127.0.0.1/dns.{zone}.\tA\t{www3}/" /var/named/{zone}.zone
+    - cmd: sed -i "/^dns.{zone}.\tA\t{dns1}/a\www.{zone}.\tA\t{www3}" /var/named/{zone}.zone
+    - cmd: sed -i "\$a\www.{zone}.\tA\t{www3}" /var/named/{zone}.zone
+    - cmd: sed -i "\$a\www3.{zone}.\tCNAME\twww.{zone}." /var/named/{zone}.zone
+
+dns2_script:
+  _cmds_:
+    - if:
+        cmd: yum install bind bind-chroot bind-utils -y
+      return_code: 0
+      do:
+        - client_script
+        - test2
+        - cmd: service named restart
+
+test2:
+  #_defines_:
+  #  master: 192.168.2.200
+  #  zone: xuegod.cn
+  _cmds_:
+    - cmd: sed -i "s/listen-on port 53 {{} 127.0.0.1; {}};/listen-on port 53 {{} any; {}};/" /etc/named.conf
+    - if:
+        cmd: grep "dnssec-lookaside" /etc/named.conf
+      return_code: 1
+      do:
+        cmd: sed -i "/dnssec-validation yes/a\\\tdnssec-lookaside auto;" /etc/named.conf
+    - cmd: sed -i "s/{ localhost; };/{ any; };/" /etc/named.conf
+    - if:
+        cmd: grep "{zone}" /etc/named.conf
+      return_code: 1
+      do:
+        cmd: sed -i "/rfc1912\.zones/i\zone \"{zone}\" IN {\n\ttype slave;\n\tfile \"slaves/{zone}\.zone.file\";\n\tmasters { {master}; };\n};" /etc/named.conf
+
+
+client_script:
+  #_defines_:
+  #  master: 192.168.2.200
+  #  zone: xuegod.cn
+  _cmds_:
+    - cmd: sed -i "s/^nameserver[[:space:]].*$/nameserver {master}/" /etc/resolv.conf
+    - if:
+        cmd: grep "DNS1=.*" /etc/sysconfig/network-scripts/ifcfg-eth0
+      return_code: 0
+      do:
+        cmd: sed -i "s/^DNS1=.*$/DNS1={master}" /etc/sysconfig/network-scripts/ifcfg-eth0
+      else:
+        cmd: echo "DNS1={master}" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+
+

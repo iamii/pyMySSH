@@ -1,0 +1,43 @@
+servers:
+  ntp_server:
+    ip: 192.168.2.200
+    port: 22
+    user: root
+    passwd: "123"
+    script: server script
+
+  ntp_client_server:
+    ip: 192.168.2.251
+    port: 22
+    user: root
+    passwd: "123"
+    script: client_script
+
+server script:
+  _cmds_:
+    test
+
+test:
+  _cmds_:
+    - cmd: yum -y install ntp
+    - cmd: iptables -I INPUT 2 -p udp --dport 123 -m state --state NEW -j ACCEPT
+    - cmd: sed -i '/0.centos.*iburst/i\server 192.168.18.99\nfudge 192.168.18.99 stratum 10' /etc/ntp.conf
+    - cmd: sed -i 's/0.centos.*iburst/time7.aliyun.com/g' /etc/ntp.conf
+    - cmd: sed -i '/[123].centos.*iburst/d' /etc/ntp.conf
+    - cmd: ntpdate time7.aliyun.com && sleep 10 && service ntpd restart;
+
+client_script:
+  _cmds_:
+    - install ntpdate
+    - ntpdate
+
+install ntpdate:
+  _cmds_:
+    cmd: yum -y install ntpdate
+
+ntpdate:
+  _cmds_:
+    - ### 延迟，sleep远端执行, wait脚本自身暂停
+      wait: 70
+    - cmd: ntpdate 192.168.2.200
+

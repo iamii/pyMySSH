@@ -1,0 +1,42 @@
+template:
+  # 全局配置
+  common:
+    # 全局选项
+    default_lease_time: 600
+    max_lease_time: 1200
+    ddns_update_style: 0
+    authoritative: 0
+  # 网段配置
+  subnets:
+    -
+      net: 192.168.18.0
+      mask: 255.255.255.0
+      range_start: 192.168.18.100
+      range_end: 192.168.18.200
+      # 网段特定选项
+      options:
+        -
+          name: routers
+          value: 192.168.18.2
+        -
+          name: broadcast-address
+          value: 192.168.18.255
+        -
+          name: domain-name
+          value: '"abcdefg.abc"'
+        -
+          name: domain-name-servers
+          value: 114.114.114.114
+      default_lease_time: 300
+  # 保留主机
+  hosts:
+    -
+      name: boss1
+      mac: 00:0C:29:5B:F2:2E
+      fix_ip: 192.168.18.111
+      server_name: boss_pc
+    -
+      name: boss2
+      mac: 68:88:88:88:88
+      fix_ip: 6.6.6.6
+      server_name: boss_notebook

@@ -1,0 +1,73 @@
+servers:
+  mysql_server:
+    ip: 192.168.18.99
+    port: 22
+    user: root
+    passwd: "123"
+    # timeout: 3
+    script: server_script
+#2-18-Mysql基本语句
+#作业：
+#1、创建一个数据库game用于存储公司游戏平台相关数据
+#在game库中创建表hero，hero表的字段和属性为： id int(20) ,name char(40),level int(2).
+#在表hero表中插入5条以上的测试数据。
+#查找出id大于4的记录。
+server_script:
+  _const_:
+    mysql_user: root
+    mysql_pass: 123456
+  main:
+    _cmds_:
+      -
+        cmd_func
+
+  cmd_func:
+    _cmds_:
+      -
+        call_timeout: 20
+        sc_timeout: 20
+        cmd: mysql -uroot -p
+        std_in:
+          - "123456"
+          - CREATE DATABASE game;
+          - USE game;
+          - CREATE TABLE hero (
+              id INT(20),
+              name CHAR(40),
+              level INT(2)
+              )ENGINE=INNODB;
+          - INSERT INTO hero values(1, 'aaa', 10);
+          - INSERT INTO hero values(2, 'bbb', 20);
+          - INSERT INTO hero values(3, 'ccc', 30);
+          - INSERT INTO hero values(4, 'ddd', 40);
+          - INSERT INTO hero values(5, 'eee', 50);
+          - INSERT INTO hero values(6, 'fff', 60);
+          - SELECT * FROM hero;
+          - quit
+
+  mysql_func:
+    _const_:
+    _cmds_:
+      -
+        mysql: {'host': '192.168.18.99',  # 默认127.0.0.1
+              'user': 'root',
+              'password': '123456',
+              'port': 3306,  # 默认3306
+              'database': 'mysql',
+              'charset': 'utf8'  # 默认为utf8
+              }
+        dml_sql:
+          - CREATE DATABASE game;
+          - USE game;
+          - CREATE TABLE hero (
+              id INT(20),
+              name CHAR(40),
+              level INT(2)
+              )ENGINE=INNODB;
+          - INSERT INTO hero values(1, 'aaa', 10);
+          - INSERT INTO hero values(2, 'bbb', 20);
+          - INSERT INTO hero values(3, 'ccc', 30);
+          - INSERT INTO hero values(4, 'ddd', 40);
+          - INSERT INTO hero values(5, 'eee', 50);
+          - INSERT INTO hero values(6, 'fff', 60);
+          - SELECT * FROM hero
